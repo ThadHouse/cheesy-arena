@@ -668,10 +668,12 @@ func (arena *Arena) Update() {
 }
 
 // Loops indefinitely to track and update the arena components.
-func (arena *Arena) Run() {
+func (arena *Arena) Run(nods bool) {
 	// Start other loops in goroutines.
-	go arena.listenForDriverStations()
-	go arena.listenForDsUdpPackets()
+	if !nods {
+		go arena.listenForDriverStations()
+		go arena.listenForDsUdpPackets()
+	}
 	go arena.accessPoint.Run()
 	go arena.Plc.Run()
 

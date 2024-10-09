@@ -7,6 +7,7 @@
 package main
 
 import (
+	"flag"
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/web"
 	"github.com/Team254/cheesy-arena/forwarder"
@@ -18,6 +19,10 @@ const httpPort = 8080
 
 // Main entry point for the application.
 func main() {
+	nodsPtr := flag.Bool("nods", false, "Skip enabling the DS port")
+
+	flag.Parse()
+
 	arena, err := field.NewArena(eventDbPath)
 	if err != nil {
 		log.Fatalln("Error during startup: ", err)
@@ -31,5 +36,5 @@ func main() {
 	forwarder.ForwardAllAccess()
 
 	// Run the arena state machine in the main thread.
-	arena.Run()
+	arena.Run(*nodsPtr)
 }
