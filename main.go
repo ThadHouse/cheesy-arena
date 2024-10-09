@@ -9,6 +9,7 @@ package main
 import (
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/web"
+	"github.com/Team254/cheesy-arena/forwarder"
 	"log"
 )
 
@@ -25,6 +26,9 @@ func main() {
 	// Start the web server in a separate goroutine.
 	web := web.NewWeb(arena)
 	go web.ServeWebInterface(httpPort)
+
+	// Start port forwarders
+	forwarder.ForwardAllAccess()
 
 	// Run the arena state machine in the main thread.
 	arena.Run()
