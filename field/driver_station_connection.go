@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"regexp"
 	"strconv"
 	"time"
@@ -21,13 +22,13 @@ import (
 // FMS uses 1121 for sending UDP packets, and FMS Lite uses 1120. Using 1121
 // seems to work just fine and doesn't prompt to let FMS take control.
 const (
-	driverStationTcpListenPort     = 1750
-	driverStationUdpSendPort       = 1121
-	driverStationUdpSendPortLite   = 1120
-	driverStationUdpReceivePort    = 1160
-	driverStationTcpLinkTimeoutSec = 5
-	driverStationUdpLinkTimeoutSec = 1
-	maxTcpPacketBytes              = 4096
+	driverStationTcpListenPort      = 1750
+	driverStationRoboRioUdpPortLite = 1120
+	driverStationRoboRioUdpPort     = 1121
+	driverStationUdpReceivePort     = 1160
+	driverStationTcpLinkTimeoutSec  = 5
+	driverStationUdpLinkTimeoutSec  = 1
+	maxTcpPacketBytes               = 4096
 )
 
 type DriverStationConnection struct {
@@ -50,7 +51,7 @@ type DriverStationConnection struct {
 	packetCount               int
 	missedPacketOffset        int
 	tcpConn                   net.Conn
-	udpConn                   net.Conn
+	udpAddrPort               netip.AddrPort
 	log                       *TeamMatchLog
 
 	// WrongStation indicates if the team in the station is the incorrect team
@@ -66,7 +67,7 @@ func newDriverStationConnection(
 	teamId int,
 	allianceStation string,
 	tcpConn net.Conn,
-	useLiteUdpPort bool,
+	udpSendPort int,
 ) (*DriverStationConnection, error) {
 	ipAddress, _, err := net.SplitHostPort(tcpConn.RemoteAddr().String())
 	if err != nil {
@@ -74,20 +75,11 @@ func newDriverStationConnection(
 	}
 	log.Printf("Driver station for Team %d connected from %s\n", teamId, ipAddress)
 
-	udpSendPort := driverStationUdpSendPort
-	if useLiteUdpPort {
-		udpSendPort = driverStationUdpSendPortLite
-	}
-
-	udpConn, err := net.Dial("udp4", fmt.Sprintf("%s:%d", ipAddress, udpSendPort))
-	if err != nil {
-		return nil, err
-	}
 	return &DriverStationConnection{
 		TeamId:          teamId,
 		AllianceStation: allianceStation,
 		tcpConn:         tcpConn,
-		udpConn:         udpConn,
+		udpAddrPort:     netip.MustParseAddrPort(fmt.Sprintf("%s:%d", ipAddress, udpSendPort)),
 	}, nil
 }
 
@@ -99,10 +91,15 @@ func (arena *Arena) listenForDsUdpPackets() {
 		log.Fatalf("Error opening driver station UDP socket: %v", err)
 	}
 	log.Printf("Listening for driver stations on UDP port %d\n", driverStationUdpReceivePort)
+	arena.udpConnection = listener
 
 	var data [50]byte
 	for {
-		listener.Read(data[:])
+		count, _ := listener.Read(data[:])
+		if count == 0 {
+			log.Printf("Received empty packet")
+			continue
+		}
 
 		teamId := int(data[4])<<8 + int(data[5])
 
@@ -153,9 +150,6 @@ func (dsConn *DriverStationConnection) update(arena *Arena) error {
 func (dsConn *DriverStationConnection) close() {
 	if dsConn.log != nil {
 		dsConn.log.Close()
-	}
-	if dsConn.udpConn != nil {
-		dsConn.udpConn.Close()
 	}
 	if dsConn.tcpConn != nil {
 		dsConn.tcpConn.Close()
@@ -261,11 +255,9 @@ func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byt
 // Builds and sends the next control packet to the Driver Station.
 func (dsConn *DriverStationConnection) sendControlPacket(arena *Arena) error {
 	packet := dsConn.encodeControlPacket(arena)
-	if dsConn.udpConn != nil {
-		_, err := dsConn.udpConn.Write(packet[:])
-		if err != nil {
-			return err
-		}
+	_, err := arena.udpConnection.WriteToUDPAddrPort(packet[:], dsConn.udpAddrPort)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -282,7 +274,7 @@ func (dsConn *DriverStationConnection) decodeStatusPacket(data [36]byte) {
 
 // Listens for TCP connection requests to Cheesy Arena from driver stations.
 func (arena *Arena) listenForDriverStations() {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", network.ServerIpAddress, driverStationTcpListenPort))
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "", driverStationTcpListenPort))
 	if err != nil {
 		log.Printf("Error opening driver station TCP socket: %v", err.Error())
 		log.Printf("Change IP address to %s and restart Cheesy Arena to fix.", network.ServerIpAddress)
@@ -299,17 +291,32 @@ func (arena *Arena) listenForDriverStations() {
 		}
 
 		// Read the team number back and start tracking the driver station.
-		var packet [5]byte
+		var packet [7]byte
 		_, err = tcpConn.Read(packet[:])
 		if err != nil {
 			log.Println("Error reading initial packet: ", err.Error())
 			continue
 		}
-		if !(packet[0] == 0 && packet[1] == 3 && packet[2] == 24) {
+
+		udpSendPort := driverStationRoboRioUdpPort
+		if arena.EventSettings.UseLiteUdpPort {
+			udpSendPort = driverStationRoboRioUdpPortLite
+		}
+
+		isNewDs := false
+
+		if packet[0] == 0 && packet[1] == 3 && packet[2] == 24 {
+			log.Printf("Received NI DS Connection")
+		} else if packet[0] == 0 && packet[1] == 5 && packet[2] == 30 {
+			log.Printf("Received New DS Connection")
+			isNewDs = true
+			udpSendPort = int(packet[5])<<8 + int(packet[6])
+		} else {
 			log.Printf("Invalid initial packet received: %v", packet)
 			tcpConn.Close()
 			continue
 		}
+
 		teamId := int(packet[3])<<8 + int(packet[4])
 
 		// Check to see if the team is supposed to be on the field, and notify the DS accordingly.
@@ -342,21 +349,36 @@ func (arena *Arena) listenForDriverStations() {
 			}
 		}
 
-		var assignmentPacket [5]byte
+		flags := 0
+		if arena.EventSettings.UseLiteUdpPort {
+			flags |= 0x01
+		}
+
+		sendLength := 6
+
+		var assignmentPacket [6]byte
 		assignmentPacket[0] = 0  // Packet size
-		assignmentPacket[1] = 3  // Packet size
-		assignmentPacket[2] = 25 // Packet type
-		log.Printf("Accepting connection from Team %d in station %s.", teamId, assignedStation)
+		assignmentPacket[1] = 4  // Packet size
+		assignmentPacket[2] = 31 // Packet type
+		log.Printf("Accepting connection from Team %d in station %s with port %d", teamId, assignedStation, udpSendPort)
 		assignmentPacket[3] = allianceStationPositionMap[assignedStation]
 		assignmentPacket[4] = stationStatus
-		_, err = tcpConn.Write(assignmentPacket[:])
+		assignmentPacket[5] = byte(flags)
+
+		if !isNewDs {
+			assignmentPacket[2] = 25 // Packet type
+			assignmentPacket[1] = 3  // Packet size
+			sendLength = 5
+		}
+
+		_, err = tcpConn.Write(assignmentPacket[:sendLength])
 		if err != nil {
 			log.Printf("Error sending driver station assignment packet: %v", err)
 			tcpConn.Close()
 			continue
 		}
 
-		dsConn, err := newDriverStationConnection(teamId, assignedStation, tcpConn, arena.EventSettings.UseLiteUdpPort)
+		dsConn, err := newDriverStationConnection(teamId, assignedStation, tcpConn, udpSendPort)
 		if err != nil {
 			log.Printf("Error registering driver station connection: %v", err)
 			tcpConn.Close()
