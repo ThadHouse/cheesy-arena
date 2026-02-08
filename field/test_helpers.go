@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"testing"
+	"net"
 )
 
 func SetupTestArena(t *testing.T) *Arena {
@@ -20,6 +21,8 @@ func SetupTestArena(t *testing.T) *Arena {
 	dbDir := t.TempDir()
 	dbPath := filepath.Join(dbDir, "test.db")
 	arena, err := NewArena(dbPath)
+	assert.Nil(t, err)
+	arena.udpConnection, err = net.ListenUDP("udp4", nil)
 	assert.Nil(t, err)
 	t.Cleanup(
 		func() {
