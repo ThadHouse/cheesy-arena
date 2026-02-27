@@ -18,7 +18,7 @@ func TestEncodeControlPacket(t *testing.T) {
 
 	tcpConn := setupFakeTcpConnection(t)
 	defer tcpConn.Close()
-	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort)
+	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort, false)
 	assert.Nil(t, err)
 	defer dsConn.close()
 
@@ -140,7 +140,7 @@ func TestSendControlPacket(t *testing.T) {
 
 	tcpConn := setupFakeTcpConnection(t)
 	defer tcpConn.Close()
-	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort)
+	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort, false)
 	assert.Nil(t, err)
 	defer dsConn.close()
 
@@ -224,7 +224,7 @@ func TestNewDriverStationConnection_UdpPortSelection(t *testing.T) {
 	defer tcpConn.Close()
 
 	// Test with default settings (FMS port).
-	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort)
+	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort, false)
 	assert.Nil(t, err)
 	defer dsConn.close()
 	assert.Equal(t, uint16(driverStationRoboRioUdpPort), dsConn.udpAddrPort.Port())
@@ -233,7 +233,7 @@ func TestNewDriverStationConnection_UdpPortSelection(t *testing.T) {
 	defer tcpConnLite.Close()
 
 	// Test with FMS Lite port enabled.
-	dsConnLite, err := newDriverStationConnection(254, "R1", tcpConnLite, driverStationRoboRioUdpPortLite)
+	dsConnLite, err := newDriverStationConnection(254, "R1", tcpConnLite, driverStationRoboRioUdpPortLite, false)
 	assert.Nil(t, err)
 	defer dsConnLite.close()
 	assert.Equal(t, uint16(driverStationRoboRioUdpPortLite), dsConnLite.udpAddrPort.Port())

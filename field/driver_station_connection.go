@@ -57,7 +57,10 @@ type DriverStationConnection struct {
 	packetCount               int
 	tcpConn                   net.Conn
 	udpAddrPort               netip.AddrPort
+	newDs                     bool
 	log                       *TeamMatchLog
+	udpGameData               []byte
+	udpPacketSent             [1500]byte
 
 	// WrongStation indicates if the team in the station is the incorrect team
 	// by being non-empty. If the team is in the correct station, or no team is
@@ -73,6 +76,7 @@ func newDriverStationConnection(
 	allianceStation string,
 	tcpConn net.Conn,
 	udpSendPort int,
+	newDs bool,
 ) (*DriverStationConnection, error) {
 	ipAddress, _, err := net.SplitHostPort(tcpConn.RemoteAddr().String())
 	if err != nil {
@@ -85,6 +89,7 @@ func newDriverStationConnection(
 		AllianceStation: allianceStation,
 		tcpConn:         tcpConn,
 		udpAddrPort:     netip.MustParseAddrPort(fmt.Sprintf("%s:%d", ipAddress, udpSendPort)),
+		newDs:           newDs,
 	}, nil
 }
 
@@ -193,8 +198,9 @@ func (dsConn *DriverStationConnection) signalMatchStart(match *model.Match, wifi
 }
 
 // Serializes the control information into a packet.
-func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byte {
-	var packet [22]byte
+func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) []byte {
+	packet := dsConn.udpPacketSent
+	packetLength := 22
 
 	// Packet number, stored big-endian in two bytes.
 	packet[0] = byte((dsConn.packetCount >> 8) & 0xff)
@@ -273,10 +279,17 @@ func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byt
 	packet[20] = byte(matchSecondsRemaining >> 8 & 0xff)
 	packet[21] = byte(matchSecondsRemaining & 0xff)
 
+	udpGameData := dsConn.udpGameData
+
+	if udpGameData != nil {
+		copy(packet[22:], udpGameData)
+		packetLength += len(udpGameData)
+	}
+
 	// Increment the packet count for next time.
 	dsConn.packetCount++
 
-	return packet
+	return packet[:packetLength]
 }
 
 // Builds and sends the next control packet to the Driver Station.
@@ -401,7 +414,7 @@ func (arena *Arena) listenForDriverStations() {
 			continue
 		}
 
-		dsConn, err := newDriverStationConnection(teamId, assignedStation, tcpConn, udpSendPort)
+		dsConn, err := newDriverStationConnection(teamId, assignedStation, tcpConn, udpSendPort, isNewDs)
 		if err != nil {
 			log.Printf("Error registering driver station connection: %v", err)
 			tcpConn.Close()
@@ -472,9 +485,24 @@ func (dsConn *DriverStationConnection) handleTcpConnection(arena *Arena) {
 	}
 }
 
+func (dsConn *DriverStationConnection) sendGameDataUdp(byteData []byte) error {
+	size := len(byteData)
+	packet := make([]byte, size+2)
+
+	packet[0] = byte(size + 1) // Packet size
+	packet[1] = 67             // Packet type
+
+	// Fill the rest of the packet with the data.
+	for i, character := range byteData {
+		packet[i+2] = character
+	}
+
+	dsConn.udpGameData = packet
+	return nil
+}
+
 // Sends a TCP packet containing the given game data to the driver station.
-func (dsConn *DriverStationConnection) sendGameDataPacket(gameData string) error {
-	byteData := []byte(gameData)
+func (dsConn *DriverStationConnection) sendGameDataTcp(byteData []byte) error {
 	size := len(byteData)
 	packet := make([]byte, size+4)
 
@@ -493,4 +521,17 @@ func (dsConn *DriverStationConnection) sendGameDataPacket(gameData string) error
 		return err
 	}
 	return nil
+}
+
+func (dsConn *DriverStationConnection) sendGameData(gameData string) error {
+	byteData := []byte(gameData)
+	if len(byteData) > 8 {
+		// Game data too long, error
+		return fmt.Errorf("game data too long to send: %s", gameData)
+	}
+	if dsConn.newDs {
+		return dsConn.sendGameDataUdp(byteData)
+	} else {
+		return dsConn.sendGameDataTcp(byteData)
+	}
 }
