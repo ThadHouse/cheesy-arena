@@ -227,7 +227,7 @@ func TestNewDriverStationConnection_UdpPortSelection(t *testing.T) {
 	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, driverStationRoboRioUdpPort)
 	assert.Nil(t, err)
 	defer dsConn.close()
-	assert.Equal(t, dsConn.udpAddrPort.Port(), driverStationRoboRioUdpPort)
+	assert.Equal(t, uint16(driverStationRoboRioUdpPort), dsConn.udpAddrPort.Port())
 
 	tcpConnLite := setupFakeTcpConnection(t)
 	defer tcpConnLite.Close()
@@ -236,7 +236,7 @@ func TestNewDriverStationConnection_UdpPortSelection(t *testing.T) {
 	dsConnLite, err := newDriverStationConnection(254, "R1", tcpConnLite, driverStationRoboRioUdpPortLite)
 	assert.Nil(t, err)
 	defer dsConnLite.close()
-	assert.Contains(t, dsConn.udpAddrPort.Port(), driverStationRoboRioUdpPortLite)
+	assert.Equal(t, uint16(driverStationRoboRioUdpPortLite), dsConnLite.udpAddrPort.Port())
 }
 
 func setupFakeTcpConnection(t *testing.T) net.Conn {

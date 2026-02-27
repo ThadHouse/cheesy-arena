@@ -20,8 +20,13 @@ import (
 	"github.com/Team254/cheesy-arena/network"
 )
 
+// For the old NI DS, tags 24 and 25 are used for the initial connection.
 // FMS uses 1121 for sending UDP packets, and FMS Lite uses 1120. Using 1121
 // seems to work just fine and doesn't prompt to let FMS take control.
+//
+// For the new DS, tags 30 and 31 are used for the initial connection. FMS vs FMS Lite
+// comes over that port, and the main difference is that the initial tag contains the
+// UDP port for the FMS to reply to.
 const (
 	driverStationTcpListenPort      = 1750
 	driverStationRoboRioUdpPortLite = 1120
@@ -29,7 +34,7 @@ const (
 	driverStationUdpReceivePort     = 1160
 	driverStationTcpLinkTimeoutSec  = 5
 	driverStationUdpLinkTimeoutSec  = 1
-	maxTcpPacketBytes              	= 65537 // 2 for size, then 2^16-1 for data.
+	maxTcpPacketBytes               = 65537 // 2 for size, then 2^16-1 for data.
 )
 
 type DriverStationConnection struct {
@@ -276,6 +281,11 @@ func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byt
 
 // Builds and sends the next control packet to the Driver Station.
 func (dsConn *DriverStationConnection) sendControlPacket(arena *Arena) error {
+	// Skip if UDP listener has not been started
+	if arena.udpConnection == nil {
+		return nil
+	}
+
 	packet := dsConn.encodeControlPacket(arena)
 	_, err := arena.udpConnection.WriteToUDPAddrPort(packet[:], dsConn.udpAddrPort)
 	if err != nil {
