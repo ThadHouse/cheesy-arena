@@ -287,7 +287,7 @@ func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byt
 
 // Builds and sends the next control packet to the Driver Station.
 func (dsConn *DriverStationConnection) sendControlPacket(arena *Arena, gameData string) error {
-	dsConn.checkGameData(gameData)
+	gameDataErr := dsConn.checkGameData(gameData)
 	packet := dsConn.encodeControlPacket(arena)
 	if dsConn.udpConn != nil {
 		_, err := dsConn.udpConn.Write(packet[:])
@@ -296,7 +296,7 @@ func (dsConn *DriverStationConnection) sendControlPacket(arena *Arena, gameData 
 		}
 	}
 
-	return nil
+	return gameDataErr
 }
 
 // Listens for TCP connection requests to Cheesy Arena from driver stations.
@@ -446,16 +446,18 @@ func (dsConn *DriverStationConnection) handleTcpConnection(arena *Arena) {
 	}
 }
 
-func (dsConn *DriverStationConnection) checkGameData(gameData string) {
+func (dsConn *DriverStationConnection) checkGameData(gameData string) error {
 	needsGameDataUpdate := dsConn.SentGameData != gameData
 	if needsGameDataUpdate {
 		err := dsConn.sendGameDataPacket(gameData)
 		if err != nil {
 			log.Printf("Error sending game data packet to Team %d: %v", dsConn.TeamId, err)
+			return err
 		} else {
 			dsConn.SentGameData = gameData
 		}
 	}
+	return nil
 }
 
 // Sends a TCP packet containing the given game data to the driver station.
