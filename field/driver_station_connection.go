@@ -448,11 +448,12 @@ func (dsConn *DriverStationConnection) handleTcpConnection(arena *Arena) {
 
 func (dsConn *DriverStationConnection) checkGameData(gameData string) {
 	needsGameDataUpdate := dsConn.SentGameData != gameData
-	dsConn.SentGameData = gameData
 	if needsGameDataUpdate {
 		err := dsConn.sendGameDataPacket(gameData)
 		if err != nil {
 			log.Printf("Error sending game data packet to Team %d: %v", dsConn.TeamId, err)
+		} else {
+			dsConn.SentGameData = gameData
 		}
 	}
 }
