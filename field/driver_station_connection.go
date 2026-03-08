@@ -106,9 +106,14 @@ func (arena *Arena) listenForDsUdpPackets() {
 
 	data := make([]byte, 1500)
 	for {
-		count, _ := listener.Read(data[:])
+		count, addr, _ := listener.ReadFromUDPAddrPort(data[:])
 		if count < 8 {
 			log.Printf("Received packet with insufficient length: %d", count)
+			continue
+		}
+
+		if !addr.Addr().Is4() && !addr.Addr().Is4In6() {
+			log.Printf("Received packet from non-IPv4 address: %s", addr.Addr().String())
 			continue
 		}
 
@@ -116,23 +121,22 @@ func (arena *Arena) listenForDsUdpPackets() {
 
 		teamId := int(data[4])<<8 + int(data[5])
 
+		if commVersion == 1 {
+			if teamId != int(addr.Port()) {
+				log.Printf("Received packet with mismatched contained source port %d and actual source port %d", teamId, addr.Port())
+				continue
+			}
+			// For the new DS, the team id is not sent in the packet, so we need to look it up from the IP address.
+			addr4 := addr.Addr().As4()
+			teamId = int(addr4[1])*100 + int(addr4[2])
+		}
+
 		var dsConn *DriverStationConnection
-		if commVersion == 0 {
-			for _, allianceStation := range arena.AllianceStations {
-				if allianceStation.Team != nil && allianceStation.Team.Id == teamId {
-					dsConn = allianceStation.DsConn
-					break
-				}
+		for _, allianceStation := range arena.AllianceStations {
+			if allianceStation.Team != nil && allianceStation.Team.Id == teamId {
+				dsConn = allianceStation.DsConn
+				break
 			}
-		} else if commVersion == 1 {
-			for _, allianceStation := range arena.AllianceStations {
-				if allianceStation.DsConn != nil && allianceStation.DsConn.udpSendPort == teamId {
-					dsConn = allianceStation.DsConn
-					break
-				}
-			}
-		} else {
-			log.Printf("Received packet with unknown version %d", commVersion)
 		}
 
 		if dsConn != nil {
