@@ -353,6 +353,10 @@ func (arena *Arena) listenForDriverStations() {
 				log.Printf("Error parsing team number from new DS connection: %v", err)
 				go handleInvalidTcpConnection(tcpConn, 3, 0, isNewDs)
 				continue
+			} else if teamId < 0 || teamId > 65535 {
+				log.Printf("Team number from new DS connection out of range: %d", teamId)
+				go handleInvalidTcpConnection(tcpConn, 3, 0, isNewDs)
+				continue
 			}
 		} else {
 			log.Printf("Invalid initial packet received: %v", packet)
