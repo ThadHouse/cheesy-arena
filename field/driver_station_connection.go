@@ -56,7 +56,6 @@ type DriverStationConnection struct {
 	lastRobotLinkedTime       time.Time
 	packetCount               int
 	tcpConn                   net.Conn
-	udpSendPort               int
 	udpAddrPort               netip.AddrPort
 	newDs                     bool
 	log                       *TeamMatchLog
@@ -88,7 +87,6 @@ func newDriverStationConnection(
 		TeamId:          teamId,
 		AllianceStation: allianceStation,
 		tcpConn:         tcpConn,
-		udpSendPort:     udpSendPort,
 		udpAddrPort:     netip.MustParseAddrPort(fmt.Sprintf("%s:%d", ipAddress, udpSendPort)),
 		newDs:           newDs,
 	}, nil
@@ -106,30 +104,13 @@ func (arena *Arena) listenForDsUdpPackets() {
 
 	data := make([]byte, 1500)
 	for {
-		count, addr, _ := listener.ReadFromUDPAddrPort(data[:])
+		count, _ := listener.Read(data[:])
 		if count < 8 {
 			log.Printf("Received packet with insufficient length: %d", count)
 			continue
 		}
 
-		if !addr.Addr().Is4() && !addr.Addr().Is4In6() {
-			log.Printf("Received packet from non-IPv4 address: %s", addr.Addr().String())
-			continue
-		}
-
-		commVersion := data[2]
-
 		teamId := int(data[4])<<8 + int(data[5])
-
-		if commVersion == 1 {
-			if teamId != int(addr.Port()) {
-				log.Printf("Received packet with mismatched contained source port %d and actual source port %d", teamId, addr.Port())
-				continue
-			}
-			// For the new DS, the team id is not sent in the packet, so we need to look it up from the IP address.
-			addr4 := addr.Addr().As4()
-			teamId = int(addr4[1])*100 + int(addr4[2])
-		}
 
 		var dsConn *DriverStationConnection
 		for _, allianceStation := range arena.AllianceStations {
@@ -175,7 +156,7 @@ func (arena *Arena) listenForDsUdpPackets() {
 				dsConn.BatteryVoltage = float64(data[6]) + float64(data[7])/256
 			}
 		} else {
-			log.Printf("Failed to find DS for UDP packet with version %d and teamid %d", commVersion, teamId)
+			log.Printf("Failed to find DS for UDP packet with teamid %d", teamId)
 		}
 	}
 }
@@ -221,22 +202,13 @@ func (dsConn *DriverStationConnection) signalMatchStart(match *model.Match, wifi
 func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) []byte {
 	packet := dsConn.udpPacketSent
 	packetLength := 22
-	if dsConn.newDs {
-		// TODO, will include game data
-		packetLength = 23
-		packet[22] = 0 // 0 length for now
-	}
 
 	// Packet number, stored big-endian in two bytes.
 	packet[0] = byte((dsConn.packetCount >> 8) & 0xff)
 	packet[1] = byte(dsConn.packetCount & 0xff)
 
 	// Protocol version.
-	if dsConn.newDs {
-		packet[2] = 1
-	} else {
-		packet[2] = 0
-	}
+	packet[2] = 0
 
 	// Robot status byte.
 	packet[3] = 0
@@ -421,14 +393,16 @@ func (arena *Arena) listenForDriverStations() {
 
 		sendLength := 6
 
-		var assignmentPacket [6]byte
+		var assignmentPacket [8]byte
 		assignmentPacket[0] = 0  // Packet size
-		assignmentPacket[1] = 4  // Packet size
+		assignmentPacket[1] = 6  // Packet size
 		assignmentPacket[2] = 31 // Packet type
 		log.Printf("Accepting connection from Team %d in station %s with port %d", teamId, assignedStation, udpSendPort)
 		assignmentPacket[3] = allianceStationPositionMap[assignedStation]
 		assignmentPacket[4] = stationStatus
 		assignmentPacket[5] = byte(flags)
+		assignmentPacket[6] = byte(teamId >> 8)
+		assignmentPacket[7] = byte(teamId & 0xFF)
 
 		if !isNewDs {
 			assignmentPacket[2] = 25 // Packet type
