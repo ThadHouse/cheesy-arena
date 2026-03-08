@@ -490,14 +490,16 @@ func (dsConn *DriverStationConnection) handleTcpConnection(arena *Arena) {
 
 func handleInvalidTcpConnection(tcpConn net.Conn, status int, station int, isNewDs bool) {
 	log.Printf("Handling invalid TCP connection from %v with status %d and station %d", tcpConn.RemoteAddr(), status, station)
-	var assignmentPacket [6]byte
-	sendLength := 6
+	var assignmentPacket [8]byte
+	sendLength := 8
 	assignmentPacket[0] = 0  // Packet size
 	assignmentPacket[1] = 4  // Packet size
 	assignmentPacket[2] = 31 // Packet type
 	assignmentPacket[3] = byte(station)
 	assignmentPacket[4] = byte(status)
 	assignmentPacket[5] = 0
+	assignmentPacket[6] = 0
+	assignmentPacket[7] = 0
 	if !isNewDs {
 		assignmentPacket[2] = 25 // Packet type
 		assignmentPacket[1] = 3  // Packet size
