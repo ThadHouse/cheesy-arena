@@ -111,6 +111,7 @@ type AllianceStation struct {
 	Team       *model.Team
 	WifiStatus network.TeamWifiStatus
 	aStopReset bool
+	GameData   string
 }
 
 // Creates the arena and sets it to its initial state.
@@ -641,6 +642,10 @@ func (arena *Arena) Update() {
 	case PreMatch:
 		auto = true
 		enabled = false
+		// Set all game data values to empty
+		for _, allianceStation := range arena.AllianceStations {
+			allianceStation.GameData = ""
+		}
 	case StartMatch:
 		arena.MatchStartTime = time.Now()
 		arena.LastMatchTimeSec = -1
@@ -1037,7 +1042,7 @@ func (arena *Arena) sendDsPacket(auto bool, enabled bool) {
 				!allianceStation.Bypass
 			dsConn.EStop = allianceStation.EStop
 			dsConn.AStop = allianceStation.AStop
-			err := dsConn.update(arena)
+			err := dsConn.update(arena, allianceStation.GameData)
 			if err != nil {
 				log.Printf("Unable to send driver station packet for team %d.", allianceStation.Team.Id)
 			}

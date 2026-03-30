@@ -145,7 +145,7 @@ func TestSendControlPacket(t *testing.T) {
 	defer dsConn.close()
 
 	// No real way of checking this since the destination IP is remote, so settle for there being no errors.
-	err = dsConn.sendControlPacket(arena)
+	err = dsConn.sendControlPacket(arena, "")
 	assert.Nil(t, err)
 }
 
@@ -175,8 +175,10 @@ func TestListenForDriverStations(t *testing.T) {
 		dataSend := [5]byte{0, 3, 24, 5, 223}
 		tcpConn.Write(dataSend[:])
 		var dataReceived [5]byte
-		_, err = tcpConn.Read(dataReceived[:])
-		assert.NotNil(t, err)
+		count, err := tcpConn.Read(dataReceived[:])
+		assert.Nil(t, err)
+		assert.Equal(t, count, 5)
+		assert.Equal(t, [5]byte{0, 3, 25, 0, 2}, dataReceived)
 		tcpConn.Close()
 	}
 
