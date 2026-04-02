@@ -411,7 +411,7 @@ func (arena *Arena) listenForDriverStations() {
 			flags |= 0x01
 		}
 
-		sendLength := 6
+		sendLength := 8
 
 		var assignmentPacket [8]byte
 		assignmentPacket[0] = 0  // Packet size
