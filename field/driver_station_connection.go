@@ -35,6 +35,7 @@ const (
 	driverStationTcpLinkTimeoutSec  = 5
 	driverStationUdpLinkTimeoutSec  = 1
 	maxTcpPacketBytes               = 65537 // 2 for size, then 2^16-1 for data.
+	dsHostIpAddre
 )
 
 type DriverStationConnection struct {
@@ -95,7 +96,7 @@ func newDriverStationConnection(
 
 // Loops indefinitely to read packets and update connection status.
 func (arena *Arena) listenForDsUdpPackets() {
-	udpAddress, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", driverStationUdpReceivePort))
+	udpAddress, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", network.ServerIpAddress, driverStationUdpReceivePort))
 	listener, err := net.ListenUDP("udp4", udpAddress)
 	if err != nil {
 		log.Fatalf("Error opening driver station UDP socket: %v", err)
@@ -319,7 +320,7 @@ func (dsConn *DriverStationConnection) sendControlPacket(arena *Arena, gameData 
 
 // Listens for TCP connection requests to Cheesy Arena from driver stations.
 func (arena *Arena) listenForDriverStations() {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "", driverStationTcpListenPort))
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", network.ServerIpAddress, driverStationTcpListenPort))
 	if err != nil {
 		log.Printf("Error opening driver station TCP socket: %v", err.Error())
 		log.Printf("Change IP address to %s and restart Cheesy Arena to fix.", network.ServerIpAddress)
