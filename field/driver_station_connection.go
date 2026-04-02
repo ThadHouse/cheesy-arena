@@ -401,6 +401,7 @@ func (arena *Arena) listenForDriverStations() {
 		wrongAssignedStation := ""
 		if stationTeamId != teamId {
 			wrongAssignedStation = arena.getAssignedAllianceStation(stationTeamId)
+			log.Printf("Received wrong station %v", wrongAssignedStation)
 			if wrongAssignedStation != "" {
 				// The team is supposed to be in this match, but is plugged into the wrong station.
 				log.Printf("Team %d is in incorrect station %s.", teamId, wrongAssignedStation)

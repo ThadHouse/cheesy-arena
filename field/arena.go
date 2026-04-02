@@ -1061,10 +1061,12 @@ func (arena *Arena) getAssignedAllianceStation(teamId int) string {
 		}
 		log.Printf("Checking station id %v %v %v", allianceStation.Team, allianceStation.Team.Id, teamId)
 		if allianceStation.Team != nil && allianceStation.Team.Id == teamId {
+			log.Printf("Returning valid station")
 			return station
 		}
 	}
 
+	log.Printf("Returning error station")
 	return ""
 }
 
