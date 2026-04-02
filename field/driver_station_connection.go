@@ -361,8 +361,9 @@ func (arena *Arena) listenForDriverStations() {
 			log.Printf("Received New DS Connection")
 			isNewDs = true
 			udpSendPort = int(packet[3])<<8 + int(packet[4])
-			// Try to parse the team number in ASCII, it's the rest of the packet
-			teamIdStr := string(packet[5:count])
+			// Try to parse the team number in ASCII
+			teamNumberLen := int(packet[5])
+			teamIdStr := string(packet[6 : 6+teamNumberLen])
 			teamId, err = strconv.Atoi(teamIdStr)
 			if err != nil {
 				log.Printf("Error parsing team number from new DS connection: %v", err)
@@ -512,7 +513,7 @@ func handleInvalidTcpConnection(tcpConn net.Conn, status int, station int, isNew
 	var assignmentPacket [8]byte
 	sendLength := 8
 	assignmentPacket[0] = 0  // Packet size
-	assignmentPacket[1] = 4  // Packet size
+	assignmentPacket[1] = 6  // Packet size
 	assignmentPacket[2] = 31 // Packet type
 	assignmentPacket[3] = byte(station)
 	assignmentPacket[4] = byte(status)
