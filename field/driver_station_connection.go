@@ -397,6 +397,7 @@ func (arena *Arena) listenForDriverStations() {
 		teamDigit1, _ := strconv.Atoi(teamDigits[1])
 		teamDigit2, _ := strconv.Atoi(teamDigits[2])
 		stationTeamId := teamDigit1*100 + teamDigit2
+		log.Printf("Received connection with station team id %d for team id %d", stationTeamId, teamId)
 		wrongAssignedStation := ""
 		if stationTeamId != teamId {
 			wrongAssignedStation = arena.getAssignedAllianceStation(stationTeamId)

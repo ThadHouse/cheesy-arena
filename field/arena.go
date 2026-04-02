@@ -1055,6 +1055,11 @@ func (arena *Arena) sendDsPacket(auto bool, enabled bool) {
 // in the current match.
 func (arena *Arena) getAssignedAllianceStation(teamId int) string {
 	for station, allianceStation := range arena.AllianceStations {
+		if allianceStation.Team == nil {
+			log.Printf("Null team")
+			continue
+		}
+		log.Printf("Checking station id %v %v %v", allianceStation.Team, allianceStation.Team.Id, teamId)
 		if allianceStation.Team != nil && allianceStation.Team.Id == teamId {
 			return station
 		}
