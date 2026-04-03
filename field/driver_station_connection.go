@@ -35,7 +35,6 @@ const (
 	driverStationTcpLinkTimeoutSec  = 5
 	driverStationUdpLinkTimeoutSec  = 1
 	maxTcpPacketBytes               = 65537 // 2 for size, then 2^16-1 for data.
-	dsHostIpAddre
 )
 
 type DriverStationConnection struct {
@@ -60,7 +59,7 @@ type DriverStationConnection struct {
 	udpAddrPort               netip.AddrPort
 	newDs                     bool
 	log                       *TeamMatchLog
-	udpPacketSent             [1500]byte
+	udpSendPacket             [1500]byte
 	SentGameData              string
 
 	// WrongStation indicates if the team in the station is the incorrect team
@@ -209,7 +208,7 @@ func (dsConn *DriverStationConnection) signalMatchStart(match *model.Match, wifi
 
 // Serializes the control information into a packet.
 func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) []byte {
-	packet := dsConn.udpPacketSent
+	packet := dsConn.udpSendPacket
 	packetLength := 22
 
 	// Packet number, stored big-endian in two bytes.
