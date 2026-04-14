@@ -379,6 +379,12 @@ func (arena *Arena) serveDriverStations(listener net.Listener) {
 		}
 		packet := fullPacket[:count]
 
+		if len(packet) < 5 {
+			log.Println("Invalid initial packet received: ", packet)
+			tcpConn.Close()
+			continue
+		}
+
 		udpSendPort := driverStationRoboRioUdpPort
 		if arena.EventSettings.UseLiteUdpPort {
 			udpSendPort = driverStationRoboRioUdpPortLite
@@ -392,6 +398,11 @@ func (arena *Arena) serveDriverStations(listener net.Listener) {
 			log.Printf("Received NI DS Connection")
 			teamId = int(packet[3])<<8 + int(packet[4])
 		} else if packet[0] == 0 && packet[1] >= 5 && packet[2] == 30 {
+			if len(packet) < 7 {
+				log.Printf("Invalid initial packet of length %d received: %v", len(packet), packet)
+				tcpConn.Close()
+				continue
+			}
 			log.Printf("Received New DS Connection")
 			isNewDs = true
 			packenLen := int(packet[0])<<8 + int(packet[1])
@@ -399,9 +410,9 @@ func (arena *Arena) serveDriverStations(listener net.Listener) {
 			// Skip 5, its flags currently
 			// Try to parse the team number in ASCII
 			teamNumberLen := int(packet[6])
-			if packenLen < 7+teamNumberLen {
-				log.Printf("Invalid initial packet received with team number length %d: %v", teamNumberLen, packet)
-				go handleInvalidTcpConnection(tcpConn, 3, 0, isNewDs)
+			if packenLen < 5+teamNumberLen || len(packet) < 7+teamNumberLen {
+				log.Printf("Invalid initial packet of length %d received with team number length %d: %v", packenLen, teamNumberLen, packet)
+				tcpConn.Close()
 				continue
 			}
 			teamIdStr := string(packet[7 : 7+teamNumberLen])
