@@ -391,13 +391,20 @@ func (arena *Arena) serveDriverStations(listener net.Listener) {
 		if packet[0] == 0 && packet[1] == 3 && packet[2] == 24 {
 			log.Printf("Received NI DS Connection")
 			teamId = int(packet[3])<<8 + int(packet[4])
-		} else if packet[0] == 0 && packet[1] >= 3 && packet[2] == 30 {
+		} else if packet[0] == 0 && packet[1] >= 5 && packet[2] == 30 {
 			log.Printf("Received New DS Connection")
 			isNewDs = true
+			packenLen := int(packet[0])<<8 + int(packet[1])
 			udpSendPort = int(packet[3])<<8 + int(packet[4])
+			// Skip 5, its flags currently
 			// Try to parse the team number in ASCII
-			teamNumberLen := int(packet[5])
-			teamIdStr := string(packet[6 : 6+teamNumberLen])
+			teamNumberLen := int(packet[6])
+			if packenLen < 7+teamNumberLen {
+				log.Printf("Invalid initial packet received with team number length %d: %v", teamNumberLen, packet)
+				go handleInvalidTcpConnection(tcpConn, 3, 0, isNewDs)
+				continue
+			}
+			teamIdStr := string(packet[7 : 7+teamNumberLen])
 			teamId, err = strconv.Atoi(teamIdStr)
 			if err != nil {
 				log.Printf("Error parsing team number from new DS connection: %v", err)
